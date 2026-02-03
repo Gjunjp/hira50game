@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>この冬休みで五十音マスター！</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Kiwi Maru', 'Microsoft JhengHei', sans-serif;
+            background: linear-gradient(135deg, #f3e8ff 0%, #fae8ff 100%);
+            min-height: 100vh;
+            color: #4c1d95;
+            padding-bottom: 100px;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .game-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 20px 25px -5px rgba(168, 85, 247, 0.2);
+        }
+
+        .mascot-bounce {
+            animation: bounce 3s infinite ease-in-out;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0) rotate(0); }
+            50% { transform: translateY(-15px) rotate(5deg); }
+        }
+
+        /* 記憶翻牌樣式 */
+        .memory-card { perspective: 1000px; height: 100px; }
+        .memory-card-inner {
+            position: relative; width: 100%; height: 100%;
+            transition: transform 0.6s; transform-style: preserve-3d; cursor: pointer;
+        }
+        .memory-card.flipped .memory-card-inner { transform: rotateY(180deg); }
+        .memory-card-front, .memory-card-back {
+            position: absolute; width: 100%; height: 100%;
+            backface-visibility: hidden; display: flex; align-items: center; justify-content: center;
+            border-radius: 1rem; font-size: 1.5rem;
+        }
+        .memory-card-back { background: white; transform: rotateY(180deg); border: 2px solid #c084fc; }
+        .memory-card-front { background: #c084fc; color: white; }
+
+        .modal-overlay { background: rgba(76, 29, 149, 0.4); backdrop-filter: blur(4px); }
+        
+        /* OOXX 樣式 */
+        .ooxx-cell {
+            aspect-ratio: 1 / 1;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2.5rem; background: white; border: 2px solid #ddd;
+            border-radius: 1rem; cursor: pointer;
+        }
+        .ooxx-cell:hover { background: #fdf4ff; }
+
+        /* 1A2B 點選樣式 */
+        .char-pool-btn {
+            width: 45px; height: 45px;
+            display: flex; align-items: center; justify-content: center;
+            background: white; border: 2px solid #e9d5ff;
+            border-radius: 0.75rem; font-weight: bold;
+            transition: all 0.2s;
+        }
+        .char-pool-btn:hover:not(:disabled) { background: #f3e8ff; border-color: #c084fc; transform: scale(1.1); }
+        .char-pool-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        
+        .guess-slot {
+            width: 60px; height: 60px;
+            display: flex; align-items: center; justify-content: center;
+            background: white; border: 3px dashed #ddd;
+            border-radius: 1rem; font-size: 1.5rem; font-weight: bold;
+            cursor: pointer;
+        }
+        .guess-slot.active { border-style: solid; border-color: #c084fc; color: #7c3aed; }
+
+        /* 轉盤樣式 */
+        #roulette-canvas {
+            max-width: 100%;
+            transition: transform 4s cubic-bezier(0.15, 0, 0.15, 1);
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .roulette-pointer {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0; height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 40px solid #f43f5e;
+            z-index: 50;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+        }
+
+        /* 抖動動畫 */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .shake-anim { animation: shake 0.2s ease-in-out 0s 2; }
+
+        /* 特殊下注按鈕 */
+        .bet-group-btn {
+            padding: 8px 12px;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 0.75rem;
+            font-size: 0.875rem;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .bet-group-btn:hover { background: #fdf4ff; border-color: #c084fc; }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="container mx-auto px-4 py-8 max-w-5xl">
+        
+        <!-- 字元選擇畫面 -->
+        <div id="selection-screen">
+            <header class="text-center mb-8">
+                <div class="mascot-bounce inline-block mb-4">
+                    <svg width="80" height="80" viewBox="0 0 200 200">
+                        <circle cx="100" cy="100" r="80" fill="#fb923c" />
+                        <path d="M60 60 L40 20 L80 50 Z" fill="#fb923c" />
+                        <path d="M140 60 L160 20 L120 50 Z" fill="#fb923c" />
+                        <circle cx="75" cy="90" r="10" fill="white" />
+                        <circle cx="125" cy="90" r="10" fill="white" />
+                        <circle cx="75" cy="95" r="4" fill="black" />
+                        <circle cx="125" cy="95" r="4" fill="black" />
+                        <path d="M90 120 Q100 135 110 120" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" />
+                    </svg>
+                </div>
+                <h1 class="text-4xl font-bold text-purple-700">五十音練習設定</h1>
+                <p class="text-purple-500 mt-2">勾選你想練習的範圍</p>
+            </header>
+
+            <div class="glass-card p-8 mb-8">
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-4" id="row-selection"></div>
+                <div class="mt-8 flex justify-center gap-4">
+                    <button onclick="toggleAll(true)" class="text-sm text-purple-600 underline">全選</button>
+                    <button onclick="toggleAll(false)" class="text-sm text-purple-600 underline">取消全選</button>
+                </div>
+            </div>
+
+            <div class="flex justify-center">
+                <button onclick="confirmSelection()" class="px-12 py-4 bg-purple-600 text-white rounded-full text-xl font-bold hover:bg-purple-700 shadow-xl transform transition hover:scale-105">
+                    進入遊戲選單
+                </button>
+            </div>
+        </div>
+
+        <!-- 遊戲選單畫面 -->
+        <div id="home-screen" class="hidden">
+            <header class="text-center mb-10">
+                <h1 class="text-5xl font-bold text-purple-700 mb-2">五十音遊戲館</h1>
+                <p id="selected-summary" class="text-purple-500 font-medium"></p>
+                <button onclick="showSelection()" class="mt-2 text-sm text-purple-400 underline">← 重新挑選文字</button>
+            </header>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <button onclick="startGame('memory')" class="glass-card game-card p-6 flex flex-col items-center">
+                    <div class="text-5xl mb-4">🎴</div>
+                    <h3 class="text-xl font-bold">記憶翻牌</h3>
+                </button>
+                <button onclick="startGame('ooxx')" class="glass-card game-card p-6 flex flex-col items-center">
+                    <div class="text-5xl mb-4">⭕</div>
+                    <h3 class="text-xl font-bold">圈圈叉叉 (對抗 AI)</h3>
+                </button>
+                <button onclick="startGame('1a2b')" class="glass-card game-card p-6 flex flex-col items-center">
+                    <div class="text-5xl mb-4">🔢</div>
+                    <h3 class="text-xl font-bold">平假名 1A2B</h3>
+                </button>
+                <button onclick="startGame('pairing')" class="glass-card game-card p-6 flex flex-col items-center">
+                    <div class="text-5xl mb-4">🔗</div>
+                    <h3 class="text-xl font-bold">配對連連看</h3>
+                </button>
+                <button onclick="startGame('wordquiz')" class="glass-card game-card p-6 flex flex-col items-center">
+                    <div class="text-5xl mb-4">🧸</div>
+                    <h3 class="text-xl font-bold">單字填空</h3>
+                </button>
+                <button onclick="startGame('roulette')" class="glass-card game-card p-6 flex flex-col items-center">
+                    <div class="text-5xl mb-4">🎡</div>
+                    <h3 class="text-xl font-bold">五十音轉盤</h3>
+                </button>
+            </div>
+        </div>
+
+        <!-- 遊戲區域容器 -->
+        <div id="game-container" class="hidden">
+            <div class="flex justify-between items-center mb-6">
+                <button onclick="backToHome()" class="px-6 py-2 bg-purple-200 text-purple-700 rounded-full font-bold hover:bg-purple-300">
+                    ← 退出
+                </button>
+                <div id="game-stats" class="text-xl font-bold text-purple-600"></div>
+            </div>
+            <div id="game-content" class="glass-card p-6 min-h-[450px] flex flex-col items-center justify-center relative"></div>
+        </div>
+    </div>
+
+    <!-- 結算視窗 -->
+    <div id="result-modal" class="hidden fixed inset-0 modal-overlay z-[100] flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2.5rem] p-8 max-w-md w-full text-center shadow-2xl">
+            <div class="text-6xl mb-4">✨</div>
+            <h2 class="text-3xl font-bold text-purple-700 mb-2">練習完成！</h2>
+            <div class="bg-purple-50 rounded-2xl p-4 mb-6">
+                <p class="text-gray-500 mb-1">本次練習熟悉度</p>
+                <p id="familiarity-percent" class="text-5xl font-black text-purple-600">--%</p>
+            </div>
+            <p id="result-detail" class="text-purple-400 mb-8"></p>
+            
+            <div class="flex flex-col gap-3">
+                <button onclick="reportToTeacher()" class="w-full py-4 bg-green-500 text-white rounded-full font-bold text-lg hover:bg-green-600 transition shadow-lg">
+                    把成績記錄下來告訴媽媽/劉老師
+                </button>
+                <button onclick="closeResultModal()" class="w-full py-3 bg-purple-100 text-purple-700 rounded-full font-bold hover:bg-purple-200 transition">
+                    回選單
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-10 left-1/2 transform -translate-x-1/2 translate-y-32 bg-purple-700 text-white px-8 py-3 rounded-full transition-transform duration-300 shadow-lg z-[150]">
+        已複製成功！
+    </div>
+
+    <script>
+        /* 本網頁採用 UTF-8 編碼，確保日文平假名與繁體中文介面正常顯示。
+        */
+
+        const HIRAGANA_ROWS = {
+            'あ行': ['あ','い','う','え','お'], 
+            'か行': ['か','き','く','け','こ'],
+            'さ行': ['さ','し','す','せ','そ'], 
+            'た行': ['た','ち','つ','て','と'],
+            'な行': ['な','に','ぬ','ね','の'], 
+            'は行': ['は','ひ','ふ','へ','ほ'],
+            'ま行': ['ま','み','む','め','も'], 
+            'や行': ['や','ゆ','よ'],
+            'ら行': ['ら','り','る','れ','ろ'], 
+            'わ行': ['わ','を','ん']
+        };
+
+        const HIRAGANA_TO_ROMAJI = {
+            'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
+            'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
+            'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
+            'た': 'ta', 'ち': 'chi', 'つ': 'tsu', 'て': 'te', 'と': 'to',
+            'な': 'na', 'に': 'ni', 'ぬ': 'nu', 'ね': 'ne', 'の': 'no',
+            'は': 'ha', 'ひ': 'hi', 'ふ': 'fu', 'へ': 'he', 'ほ': 'ho',
+            'ま': 'ma', 'み': 'mi', 'む': 'mu', 'め': 'me', 'も': 'mo',
+            'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
+            'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
+            'わ': 'wa', 'を': 'wo', 'ん': 'n'
+        };
+
+        const WORD_DB = [
+            { word: 'さくら', hint: '櫻花' }, { word: 'すし', hint: '壽司' },
+            { word: 'ねこ', hint: '貓' }, { word: 'いぬ', hint: '狗' },
+            { word: 'とり', hint: '鳥' }, { word: 'つき', hint: '月亮' },
+            { word: 'はな', hint: '花' }, { word: 'ゆき', hint: '雪' },
+            { word: 'うみ', hint: '海' }, { word: 'あめ', hint: '雨' },
+            { word: 'うさぎ', hint: '兔子' }, { word: 'かさ', hint: '雨傘' },
+            { word: 'こわい', hint: '害怕' }, { word: 'くろい', hint: '黑色' },
+            { word: 'いか', hint: '烏賊' }, { word: 'きつね', hint: '狐狸' },
+            { word: 'なす', hint: '茄子' }, { word: 'すいか', hint: '西瓜' },
+            { word: 'かめ', hint: '烏龜' }, { word: 'めがね', hint: '眼鏡' }
+        ];
+
+        let selectedChars = [];
+        let checkedRowNames = [];
+        let currentGameState = {};
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(f = 880) {
+            const osc = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            osc.connect(g); g.connect(audioCtx.destination);
+            osc.frequency.setValueAtTime(f, audioCtx.currentTime);
+            g.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        function initSelection() {
+            const container = document.getElementById('row-selection');
+            if (!container) return;
+            container.innerHTML = '';
+            for (const row in HIRAGANA_ROWS) {
+                const label = document.createElement('label');
+                label.className = 'flex items-center gap-2 cursor-pointer p-3 rounded-xl hover:bg-white/50 transition';
+                label.innerHTML = `<input type="checkbox" value="${row}" class="w-5 h-5 accent-purple-600" checked><span class="font-bold">${row}</span>`;
+                container.appendChild(label);
+            }
+        }
+
+        function toggleAll(checked) { document.querySelectorAll('#row-selection input').forEach(i => i.checked = checked); }
+
+        function confirmSelection() {
+            selectedChars = []; checkedRowNames = [];
+            document.querySelectorAll('#row-selection input:checked').forEach(i => {
+                selectedChars.push(...HIRAGANA_ROWS[i.value]);
+                checkedRowNames.push(i.value);
+            });
+            if (selectedChars.length < 5) return alert('請多選幾行假名！');
+            document.getElementById('selection-screen').classList.add('hidden');
+            document.getElementById('home-screen').classList.remove('hidden');
+            document.getElementById('selected-summary').innerText = `目前挑戰：${checkedRowNames.join(', ')}`;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function showSelection() {
+            document.getElementById('home-screen').classList.add('hidden');
+            document.getElementById('selection-screen').classList.remove('hidden');
+        }
+
+        function startGame(type) {
+            document.getElementById('home-screen').classList.add('hidden');
+            document.getElementById('game-container').classList.remove('hidden');
+            const content = document.getElementById('game-content');
+            const stats = document.getElementById('game-stats');
+            currentGameState = { type };
+
+            if (type === 'memory') setupMemoryGame(content, stats);
+            else if (type === 'ooxx') setupOOXXGame(content, stats);
+            else if (type === '1a2b') setup1A2BGame(content, stats);
+            else if (type === 'pairing') setupPairingGame(content, stats);
+            else if (type === 'wordquiz') setupWordQuizGame(content, stats);
+            else if (type === 'roulette') setupRouletteGame(content, stats);
+        }
+
+        function backToHome() {
+            document.getElementById('home-screen').classList.remove('hidden');
+            document.getElementById('game-container').classList.add('hidden');
+        }
+
+        function showResults(familiarity, detail) {
+            currentGameState.finalFamiliarity = Math.round(familiarity);
+            document.getElementById('familiarity-percent').innerText = currentGameState.finalFamiliarity + '%';
+            document.getElementById('result-detail').innerText = detail;
+            document.getElementById('result-modal').classList.remove('hidden');
+        }
+
+        function closeResultModal() {
+            document.getElementById('result-modal').classList.add('hidden');
+            backToHome();
+        }
+
+        function reportToTeacher() {
+            const names = { memory: '記憶翻牌', ooxx: '圈圈叉叉', '1a2b': '平假名 1A2B', pairing: '連連看', wordquiz: '單字填空', roulette: '五十音轉盤' };
+            const text = `媽媽/劉老師好！我在「五十音冬令營」完成了練習！\n\n🎮 遊戲：${names[currentGameState.type]}\n🎯 熟悉度：${currentGameState.finalFamiliarity}%\n📝 範圍：${checkedRowNames.join(', ')}\n\n我會繼續努力的！`;
+            const el = document.createElement('textarea'); el.value = text; document.body.appendChild(el);
+            el.select(); document.execCommand('copy'); document.body.removeChild(el);
+            const t = document.getElementById('toast'); t.classList.remove('translate-y-32');
+            setTimeout(() => t.classList.add('translate-y-32'), 2000);
+        }
+
+        // --- 1. 記憶翻牌 ---
+        function setupMemoryGame(container, stats) {
+            const pool = [...selectedChars].sort(() => 0.5 - Math.random()).slice(0, 6);
+            const cards = [...pool, ...pool].sort(() => 0.5 - Math.random());
+            container.innerHTML = `<div class="grid grid-cols-4 gap-4"></div>`;
+            const grid = container.querySelector('div');
+            let flipped = [], matched = 0, moves = 0;
+            stats.innerText = `步數: 0`;
+            cards.forEach(c => {
+                const el = document.createElement('div');
+                el.className = 'memory-card w-16 h-24 sm:w-20 sm:h-28';
+                el.innerHTML = `<div class="memory-card-inner"><div class="memory-card-front">?</div><div class="memory-card-back">${c}</div></div>`;
+                el.onclick = () => {
+                    if (flipped.length < 2 && !el.classList.contains('flipped')) {
+                        el.classList.add('flipped');
+                        flipped.push({ c, el });
+                        if (flipped.length === 2) {
+                            moves++; stats.innerText = `步數: ${moves}`;
+                            if (flipped[0].c === flipped[1].c) {
+                                matched += 2; flipped = []; playSound();
+                                if (matched === cards.length) showResults(Math.max(50, 110 - moves * 4), `共花費 ${moves} 步完成！`);
+                            } else {
+                                setTimeout(() => { flipped.forEach(f => f.el.classList.remove('flipped')); flipped = []; }, 800);
+                            }
+                        }
+                    }
+                };
+                grid.appendChild(el);
+            });
+        }
+
+        // --- 2. OOXX (智能 AI) ---
+        function setupOOXXGame(container, stats) {
+            container.innerHTML = `
+                <div class="text-center mb-4 text-purple-600 font-bold">你是 ⭕，電腦是 ❌！</div>
+                <div class="grid grid-cols-3 gap-2 w-full max-w-[300px]" id="ooxx-board">
+                    ${Array(9).fill().map((_, i) => `<div class="ooxx-cell" data-idx="${i}"></div>`).join('')}
+                </div>
+                <div class="mt-4 text-lg font-bold" id="ooxx-status">你的回合：⭕ (${selectedChars[0]})</div>
+            `;
+            let board = Array(9).fill(null);
+            let isPlayerTurn = true;
+            let gameOver = false;
+            const chars = [selectedChars[0], (selectedChars[1] || 'い')];
+            const cells = container.querySelectorAll('.ooxx-cell');
+            const statusEl = document.getElementById('ooxx-status');
+            const winLines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+            cells.forEach(cell => cell.onclick = () => {
+                if (!isPlayerTurn || gameOver) return;
+                const idx = cell.dataset.idx;
+                if (board[idx]) return;
+                makeMove(idx, '⭕');
+                if (checkWinAndHandle('⭕')) return;
+                if (board.every(b => b)) { handleDraw(); return; }
+                isPlayerTurn = false;
+                statusEl.innerText = "電腦正在思考攔截路徑...";
+                setTimeout(() => {
+                    const bestMove = getSmartMove();
+                    if (bestMove !== null) {
+                        makeMove(bestMove, '❌');
+                        if (checkWinAndHandle('❌')) return;
+                        if (board.every(b => b)) { handleDraw(); return; }
+                    }
+                    isPlayerTurn = true;
+                    statusEl.innerText = `你的回合：⭕ (${chars[0]})`;
+                }, 800);
+            });
+            function makeMove(idx, turn) {
+                board[idx] = turn;
+                cells[idx].innerText = turn === '⭕' ? chars[0] : chars[1];
+                cells[idx].classList.add(turn === '⭕' ? 'text-purple-600' : 'text-orange-500');
+                playSound(turn === '⭕' ? 880 : 660);
+            }
+            function getSmartMove() {
+                for (let line of winLines) {
+                    const vals = [board[line[0]], board[line[1]], board[line[2]]];
+                    if (vals.filter(v => v === '❌').length === 2 && vals.filter(v => v === null).length === 1) return line[vals.indexOf(null)];
+                }
+                for (let line of winLines) {
+                    const vals = [board[line[0]], board[line[1]], board[line[2]]];
+                    if (vals.filter(v => v === '⭕').length === 2 && vals.filter(v => v === null).length === 1) return line[vals.indexOf(null)];
+                }
+                if (board[4] === null) return 4;
+                const empty = board.map((v, i) => v === null ? i : null).filter(v => v !== null);
+                return empty.length > 0 ? empty[Math.floor(Math.random() * empty.length)] : null;
+            }
+            function checkWinAndHandle(turn) {
+                if (winLines.some(w => board[w[0]] && board[w[0]] === board[w[1]] && board[w[0]] === board[w[2]])) {
+                    gameOver = true;
+                    showResults(turn === '⭕' ? 100 : 50, turn === '⭕' ? `擊敗了 AI！學會了「${chars[0]}」！` : `被攔截了。再試試看！`);
+                    return true;
+                }
+                return false;
+            }
+            function handleDraw() { gameOver = true; showResults(80, `平手！防禦得很棒。`); }
+        }
+
+        // --- 3. 1A2B ---
+        function setup1A2BGame(container, stats) {
+            const target = [];
+            const pool = [...selectedChars];
+            while(target.length < 3 && pool.length > 0) target.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+            let currentGuess = [];
+            let tries = 0;
+            container.innerHTML = `<div class="text-center w-full max-lg"><p class="mb-4 font-bold text-purple-600">從下面選出 3 個字猜測答案！</p><div class="flex gap-4 justify-center mb-8"><div id="slot-0" class="guess-slot"></div><div id="slot-1" class="guess-slot"></div><div id="slot-2" class="guess-slot"></div></div><div id="g-hist" class="mb-6 h-28 overflow-y-auto text-sm text-left border rounded-xl p-3 bg-white/50"><p class="text-gray-400 text-center italic">尚無紀錄</p></div><div class="flex flex-wrap gap-2 justify-center p-4 bg-white/40 rounded-2xl mb-6" id="char-pool">${selectedChars.map(char => `<button class="char-pool-btn" data-char="${char}">${char}</button>`).join('')}</div><button id="g-btn" disabled class="w-full py-4 bg-purple-300 text-white rounded-full font-bold text-xl transition shadow-lg cursor-not-allowed">檢查答案</button></div>`;
+            const poolBtns = container.querySelectorAll('.char-pool-btn');
+            const submitBtn = document.getElementById('g-btn');
+            const slots = [document.getElementById('slot-0'), document.getElementById('slot-1'), document.getElementById('slot-2')];
+            const history = document.getElementById('g-hist');
+            function updateUI() {
+                slots.forEach((slot, i) => { slot.innerText = currentGuess[i] || ''; if (currentGuess[i]) slot.classList.add('active'); else slot.classList.remove('active'); });
+                poolBtns.forEach(btn => btn.disabled = currentGuess.includes(btn.dataset.char));
+                if (currentGuess.length === 3) { submitBtn.disabled = false; submitBtn.classList.replace('bg-purple-300', 'bg-purple-600'); submitBtn.classList.remove('cursor-not-allowed'); } else { submitBtn.disabled = true; submitBtn.classList.replace('bg-purple-600', 'bg-purple-300'); submitBtn.classList.add('cursor-not-allowed'); }
+            }
+            poolBtns.forEach(btn => btn.onclick = () => { if (currentGuess.length < 3) { currentGuess.push(btn.dataset.char); playSound(1200); updateUI(); } });
+            slots.forEach((slot, i) => slot.onclick = () => { if (currentGuess[i]) { currentGuess.splice(i, 1); updateUI(); } });
+            submitBtn.onclick = () => { tries++; if (history.querySelector('p.italic')) history.innerHTML = ''; let a = 0, b = 0; currentGuess.forEach((char, i) => { if (char === target[i]) a++; else if (target.includes(char)) b++; }); const log = document.createElement('div'); log.className = "flex justify-between items-center mb-1 border-b pb-1"; log.innerHTML = `<span class="text-lg font-bold text-purple-700">${currentGuess.join('')}</span> <span class="text-purple-500">${a}A ${b}B</span>`; history.prepend(log); if (a === 3) { playSound(880); showResults(Math.max(60, 100 - (tries - 1) * 5), `猜對了！答案是「${target.join('')}」`); } else { playSound(440); currentGuess = []; updateUI(); } };
+        }
+
+        // --- 4. 配對連連看 ---
+        function setupPairingGame(container, stats) {
+            const pool = [...selectedChars].sort(() => 0.5 - Math.random()).slice(0, 5);
+            const leftChars = [...pool].sort(() => 0.5 - Math.random());
+            const rightRomanji = pool.map(c => HIRAGANA_TO_ROMAJI[c]).sort(() => 0.5 - Math.random());
+            container.innerHTML = `<div class="text-center mb-6 text-purple-600 font-bold">點選平假名，再點選對應的羅馬拼音！</div><div class="flex gap-16 items-start justify-center"><div id="p-left" class="flex flex-col gap-4"><p class="text-xs text-center text-purple-300 font-bold">ひらがな</p></div><div id="p-right" class="flex flex-col gap-4"><p class="text-xs text-center text-orange-300 font-bold">Romaji</p></div></div><div id="p-error-count" class="mt-8 text-sm text-red-400 font-bold">錯誤次數: 0</div>`;
+            let selectedHiragana = null, matchedCount = 0, errors = 0;
+            const lCont = container.querySelector('#p-left'), rCont = container.querySelector('#p-right'), errorDisplay = document.getElementById('p-error-count');
+            leftChars.forEach(char => {
+                const b = document.createElement('button');
+                b.className = 'w-16 h-16 bg-white border-2 border-purple-200 rounded-xl text-3xl hover:bg-purple-50 transition shadow-sm';
+                b.innerText = char;
+                b.onclick = () => { if (b.disabled) return; document.querySelectorAll('#p-left button').forEach(btn => btn.classList.remove('ring-4', 'ring-purple-400', 'bg-purple-50')); b.classList.add('ring-4', 'ring-purple-400', 'bg-purple-50'); selectedHiragana = char; playSound(1000); };
+                lCont.appendChild(b);
+            });
+            rightRomanji.forEach(romaji => {
+                const b = document.createElement('button');
+                b.className = 'w-16 h-16 bg-white border-2 border-orange-200 rounded-xl text-xl font-bold hover:bg-orange-50 transition shadow-sm';
+                b.innerText = romaji;
+                b.onclick = () => {
+                    if (!selectedHiragana || b.disabled) return;
+                    if (HIRAGANA_TO_ROMAJI[selectedHiragana] === romaji) {
+                        playSound(880); matchedCount++;
+                        b.classList.replace('bg-white', 'bg-green-100'); b.classList.add('text-green-600', 'border-green-300'); b.disabled = true;
+                        document.querySelectorAll('#p-left button').forEach(btn => { if (btn.innerText === selectedHiragana) { btn.classList.replace('bg-white', 'bg-green-100'); btn.classList.add('text-green-600', 'border-green-300'); btn.classList.remove('ring-4', 'ring-purple-400'); btn.disabled = true; } });
+                        selectedHiragana = null; if (matchedCount === pool.length) showResults(Math.max(50, 100 - (errors * 10)), `完成配對！錯誤次數：${errors}`);
+                    } else { errors++; errorDisplay.innerText = `錯誤次數: ${errors}`; playSound(330); b.classList.add('shake-anim'); setTimeout(() => b.classList.remove('shake-anim'), 500); }
+                };
+                rCont.appendChild(b);
+            });
+        }
+
+        // --- 5. 單字填空 ---
+        function setupWordQuizGame(container, stats) {
+            const quiz = WORD_DB[Math.floor(Math.random() * WORD_DB.length)];
+            const idx = Math.floor(Math.random() * quiz.word.length);
+            const hidden = quiz.word[idx];
+            const display = quiz.word.split('').map((c, i) => i === idx ? '＿' : c).join('');
+            const options = [hidden];
+            while(options.length < 4) { const r = selectedChars[Math.floor(Math.random() * selectedChars.length)]; if (!options.includes(r)) options.push(r); }
+            options.sort(() => 0.5 - Math.random());
+            container.innerHTML = `<div class="text-center"><div class="text-4xl mb-4 text-purple-600 font-bold">${display}</div><div class="text-xl text-gray-400 mb-8">提示：${quiz.hint}</div><div class="grid grid-cols-2 gap-4">${options.map(o => `<button class="opt-btn bg-white border-2 border-purple-200 p-4 rounded-2xl text-2xl hover:bg-purple-50 transition">${o}</button>`).join('')}</div></div>`;
+            container.querySelectorAll('.opt-btn').forEach(b => b.onclick = () => { if (b.innerText === hidden) { playSound(); showResults(100, `正確！單字是「${quiz.word}」。`); } else { playSound(330); b.classList.add('bg-red-50', 'text-red-400'); } });
+        }
+
+        // --- 6. 五十音轉盤 ---
+        function setupRouletteGame(container, stats) {
+            let points = 1000;
+            let currentBet = { type: null, value: null };
+            let isSpinning = false;
+            let totalSpins = 0;
+            let wins = 0;
+
+            const wheelChars = selectedChars.length > 12 ? [...selectedChars].sort(() => 0.5 - Math.random()).slice(0, 12) : selectedChars;
+            const segments = wheelChars.length;
+            const columns = { 'a段': 0, 'i段': 1, 'u段': 2, 'e段': 3, 'o段': 4 };
+
+            container.innerHTML = `
+                <div class="flex flex-col items-center w-full max-h-[80vh] overflow-y-auto px-2">
+                    <div class="sticky top-0 z-[60] mb-4 flex gap-4 items-center bg-purple-600 text-white px-6 py-2 rounded-full shadow-lg">
+                        <div class="font-bold">💰: <span id="r-points">${points}</span></div>
+                        <div class="font-bold">🎯: <span id="r-bet-target">無</span></div>
+                    </div>
+                    
+                    <div class="relative mb-6">
+                        <div class="roulette-pointer"></div>
+                        <canvas id="roulette-canvas" width="280" height="280"></canvas>
+                    </div>
+
+                    <div class="w-full space-y-6">
+                        <div>
+                            <p class="text-sm font-bold text-purple-600 mb-2">單字下注 (賠率 1:${segments})</p>
+                            <div class="flex flex-wrap gap-2 justify-center" id="r-bet-chars">
+                                ${wheelChars.map(char => `<button class="bet-node char-pool-btn" data-type="single" data-val="${char}">${char}</button>`).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-sm font-bold text-purple-600 mb-2">行下注 (賠率 1:5)</p>
+                            <div class="flex flex-wrap gap-2 justify-center" id="r-bet-rows">
+                                ${checkedRowNames.map(row => `<button class="bet-node bet-group-btn" data-type="row" data-val="${row}">${row}</button>`).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-sm font-bold text-purple-600 mb-2">母音下注 (賠率 1:5)</p>
+                            <div class="flex flex-wrap gap-2 justify-center" id="r-bet-cols">
+                                ${Object.keys(columns).map(col => `<button class="bet-node bet-group-btn" data-type="col" data-val="${col}">${col}</button>`).join('')}
+                            </div>
+                        </div>
+                        <button id="r-spin-btn" disabled class="w-full py-4 bg-purple-300 text-white rounded-full font-bold text-xl transition shadow-lg cursor-not-allowed">
+                            旋轉轉盤！ (-100 pt)
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            const canvas = document.getElementById('roulette-canvas');
+            const ctx = canvas.getContext('2d');
+            const spinBtn = document.getElementById('r-spin-btn');
+            const pointsEl = document.getElementById('r-points');
+            const betTargetEl = document.getElementById('r-bet-target');
+            const allBetBtns = container.querySelectorAll('.bet-node');
+
+            function drawWheel() {
+                const anglePerSegment = (Math.PI * 2) / segments;
+                ctx.clearRect(0, 0, 280, 280);
+                wheelChars.forEach((char, i) => {
+                    const startAngle = i * anglePerSegment;
+                    const endAngle = (i + 1) * anglePerSegment;
+                    ctx.beginPath();
+                    ctx.moveTo(140, 140);
+                    ctx.arc(140, 140, 130, startAngle, endAngle);
+                    ctx.fillStyle = i % 2 === 0 ? '#c084fc' : '#e9d5ff';
+                    ctx.fill();
+                    ctx.strokeStyle = "white";
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.save();
+                    ctx.translate(140, 140);
+                    ctx.rotate(startAngle + anglePerSegment / 2);
+                    ctx.textAlign = "right";
+                    ctx.fillStyle = i % 2 === 0 ? "white" : "#7c3aed";
+                    ctx.font = "bold 20px Kiwi Maru";
+                    ctx.fillText(char, 120, 8);
+                    ctx.restore();
+                });
+            }
+            drawWheel();
+
+            allBetBtns.forEach(btn => {
+                btn.onclick = () => {
+                    if (isSpinning) return;
+                    currentBet = { type: btn.dataset.type, value: btn.dataset.val };
+                    betTargetEl.innerText = currentBet.value;
+                    allBetBtns.forEach(b => b.classList.remove('ring-4', 'ring-pink-500', 'bg-pink-100', 'border-pink-300'));
+                    btn.classList.add('ring-4', 'ring-pink-500', 'bg-pink-100', 'border-pink-300');
+                    if (points >= 100) {
+                        spinBtn.disabled = false;
+                        spinBtn.classList.replace('bg-purple-300', 'bg-purple-600');
+                        spinBtn.classList.remove('cursor-not-allowed');
+                    }
+                    playSound(1200);
+                };
+            });
+
+            let currentRotation = 0;
+            spinBtn.onclick = () => {
+                if (isSpinning || points < 100 || !currentBet.type) return;
+                isSpinning = true;
+                points -= 100;
+                pointsEl.innerText = points;
+                spinBtn.disabled = true;
+                spinBtn.classList.add('opacity-50');
+                const spinExtra = 1440 + Math.random() * 1440;
+                currentRotation += spinExtra;
+                canvas.style.transform = `rotate(${currentRotation}deg)`;
+                setTimeout(() => {
+                    isSpinning = false;
+                    totalSpins++;
+                    const segmentAngle = 360 / segments;
+                    const winningIndex = Math.floor(((360 - (currentRotation % 360) + 270) % 360) / segmentAngle);
+                    const winner = wheelChars[winningIndex];
+                    let isWin = false, payout = 0;
+                    if (currentBet.type === 'single') {
+                        if (winner === currentBet.value) { isWin = true; payout = 100 * segments; }
+                    } else if (currentBet.type === 'row') {
+                        if (HIRAGANA_ROWS[currentBet.value].includes(winner)) { isWin = true; payout = 500; }
+                    } else if (currentBet.type === 'col') {
+                        const vowelIdx = columns[currentBet.value];
+                        let matched = false;
+                        for(let row in HIRAGANA_ROWS) { if (HIRAGANA_ROWS[row][vowelIdx] === winner) { matched = true; break; } }
+                        if (matched) { isWin = true; payout = 500; }
+                    }
+                    if (isWin) { points += payout; wins++; playSound(880); showToast(`🎯 中了！開出「${winner}」！獲得 ${payout} pt`); }
+                    else { playSound(440); showToast(`❌ 可惜！開出的是「${winner}」`); }
+                    pointsEl.innerText = points;
+                    if (points >= 100) { spinBtn.disabled = false; spinBtn.classList.remove('opacity-50'); }
+                    if (totalSpins >= 8 || points < 100) {
+                        const fam = Math.min(100, 60 + (wins * 10));
+                        showResults(fam, `本次挑戰結束！最終餘額 ${points} pt。`);
+                    }
+                }, 4050);
+            };
+        }
+
+        window.onload = initSelection;
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.innerText = message;
+            toast.classList.remove('translate-y-32');
+            setTimeout(() => toast.classList.add('translate-y-32'), 2500);
+        }
+    </script>
+</body>
+</html>
